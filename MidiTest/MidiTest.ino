@@ -87,15 +87,19 @@ void setup()
 void loop()
 {
   //Potentiometers
-  for(int i = 0; i < numberOfPots; i++)
+  if(millis() - DELTATIME > 20)
   {
-    int potVal = map(analogRead(pots[i].pin), 0, 1023, 0, 127);
-
-    // kollar om potens värde har förändrats mer än +/-1. Pots'en är oexakta och hamnar mitt imellan 2 lägen...
-    if(pots[i].value != potVal && pots[i].value != potVal - 1 && pots[i].value != potVal + 1)
+    DELTATIME = millis();
+    for(int i = 0; i < numberOfPots; i++)
     {
-      pots[i].value = potVal;
-      midi_controller_change(MidiCH, pots[i].controllNumber, pots[i].value);
+      int potVal = map(analogRead(pots[i].pin), 0, 1023, 0, 127);
+
+      // kollar om potens värde har förändrats mer än +/-1. Pots'en är oexakta och hamnar mitt imellan 2 lägen...
+      if(pots[i].value != potVal && pots[i].value != potVal - 1 && pots[i].value != potVal + 1)
+      {
+        pots[i].value = potVal;
+        midi_controller_change(MidiCH, pots[i].controllNumber, pots[i].value);
+      }
     }
   }
 
@@ -118,11 +122,12 @@ void loop()
   }
 
   //Tiltswitches
-  for(int i = 0; i < numberOFTilts; i++)
+  if(millis() - DELTATIME > 20)
   {
-    if(millis() - DELTATIME > 20)
+    DELTATIME = millis();
+
+    for(int i = 0; i < numberOFTilts; i++)
     {
-      DELTATIME = millis();
 
       if(digitalRead(tilts[i].leftPin) == HIGH && tilts[i].value < 127)
       {
