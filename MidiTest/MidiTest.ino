@@ -4,12 +4,12 @@ Created: 4/29/2016 1:17:11 PM
 Author:  Whipe The Pipe!
 */
 
-
 /* Start Config*/
-#define PipeCH 144
+#define MidiCH 0
 #define midiVelocity 69
 #define numberOfPipes 5
 #define numberOfPots 1
+#define numberOFTilts 1
 
 const int pipePins[numberOfPipes] = {2, 4, 6, 10, 12}; //digital pin
 const int pipeLeds[numberOfPipes] = {13, 13, 13, 13, 13};
@@ -17,27 +17,43 @@ const int potPins[numberOfPots] = {5}; //analog pin
 const int baseNotes[numberOfPipes] = {51, 54, 56, 58, 61};
 /*END Config */
 
+
+/* Start Structs*/
 typedef struct
 {
   int pin;
   int ledpin;
   int note;
   bool playing;
-}pipe;
-
+}Pipe;
 typedef struct
 {
   int pin;
+  int controllNumber;
   int value;
-}pot;
+}Pot;
+typedef struct
+{
+  int leftPin;
+  int rightPin;
+  int buttonPin;
+  int controllNumber;
+  int value;
+}Tilt;
+/* END Sturcts*/
 
-pipe pipes[numberOfPipes];
-pot pots[numberOfPots];
+
+Pipe pipes[numberOfPipes];
+Pot pots[numberOfPots];
+Tilt tilts[numberOFTilts];
+
+static unsigned long DELTATIME = millis();
 
 
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+  int controllNumber = 0;
   //  Set MIDI baud rate:
   Serial.begin(115200);
 
@@ -45,6 +61,7 @@ void setup()
   for(int i = 0; i < numberOfPots; i++)
   {
     pots[i].pin = potPins[i];
+    pots[i].controllNumber = controllNumber++;
   }
 
   //Iniszialice the pipes
@@ -57,55 +74,83 @@ void setup()
     pipes[i].playing = false;
   }
 
+  //set up the tiltswitches 
+  tilts[1].leftPin = 0;
+  tilts[1].rightPin = 0;
+  tilts[1].buttonPin = 0;
+  tilts[1].controllNumber = controllNumber++;
+  tilts[1].value = 0;
+
 }
 
-// the loop function runs over and over again until power down or resetvoid loop() {
+// the loop function runs over and over again until power down or resetvoid
 void loop()
 {
-
+  //Potentiometers
   for(int i = 0; i < numberOfPots; i++)
   {
     int potVal = map(analogRead(pots[i].pin), 0, 1023, 0, 127);
 
     // kollar om potens värde har förändrats mer än +/-1. Pots'en är oexakta och hamnar mitt imellan 2 lägen...
-    if(pots[i].value != potVal && pots[i].value != potVal-1 && pots[i].value != potVal+1)
+    if(pots[i].value != potVal && pots[i].value != potVal - 1 && pots[i].value != potVal + 1)
     {
       pots[i].value = potVal;
-      sendMidi(176, i, pots[i].value);
+      midi_controller_change(MidiCH, pots[i].controllNumber, pots[i].value);
     }
   }
 
+  //Pipes
   for(int i = 0; i < numberOfPipes; i++)
   {
     if(digitalRead(pipes[i].pin) == HIGH && pipes[i].playing == false)
     {
-      sendMidi(PipeCH, pipes[i].note, midiVelocity);
+      midi_note_on(MidiCH, pipes[i].note, midiVelocity);
       pipes[i].playing = true;
       digitalWrite(pipes[i].ledpin, HIGH);
     }
     if(digitalRead(pipes[i].pin) == LOW && pipes[i].playing == true)
     {
-      sendMidi(PipeCH, pipes[i].note, 0);
+      midi_note_on(MidiCH, pipes[i].note, 0);
       pipes[i].playing = false;
       digitalWrite(pipes[i].ledpin, LOW);
     }
   }
+
+  //Tiltswitches
+  for(int i = 0; i < numberOFTilts; i++)
+  {
+    if(millis() - DELTATIME > 20)
+    {
+      DELTATIME = millis();
+
+      if(digitalRead(tilts[i].leftPin) == HIGH && tilts[i].value < 127)
+      {
+        tilts[i].value++;
+        midi_controller_change(MidiCH, tilts[i].controllNumber, tilts[i].value);
+      }
+      if(digitalRead(tilts[i].rightPin) == HIGH && tilts[i].value > 0)
+      {
+        tilts[i].value--;
+        midi_controller_change(MidiCH, tilts[i].controllNumber, tilts[i].value);
+      }
+    }
+  }
+
 }
 
-// plays a MIDI note.  Doesn't check to see that cmd is greater than 127, or that data values are less than 127:
-// noteOn is a midi message, it's also used to end a note.
-void sendMidi(int cmd, int data1, int data2)
+void midi_controller_change(int channel, int control, int value)
+{
+  midi_command(176+channel, control, value);
+}
+
+void midi_note_on(int channel, int key, int velocity)
+{
+  midi_command(144+channel, key, velocity);
+}
+
+void midi_command(int cmd, int data1, int data2)
 {
   Serial.write(cmd);
   Serial.write(data1);
   Serial.write(data2);
-}
-
-// Value is +/- 8192
-void PitchWheelChange(int value)
-{
-  unsigned int change = 8192 + value;  // 
-  unsigned char low = change & 127;  // Low 7 bits
-  unsigned char high = (change >> 7) & 0x7F;  // High 7 bits
-  sendMidi(224, low, high);
 }
