@@ -102,13 +102,14 @@ void loop()
   //Pipes
   for(int i = 0; i < numberOfPipes; i++)
   {
-    if(digitalRead(pipes[i].pin) == HIGH && pipes[i].playing == false)
+    int status = digitalRead(pipes[i].pin);
+    if(status == HIGH && pipes[i].playing == false)
     {
       midi_note_on(MidiCH, pipes[i].note, midiVelocity);
       pipes[i].playing = true;
       digitalWrite(pipes[i].ledpin, HIGH);
     }
-    if(digitalRead(pipes[i].pin) == LOW && pipes[i].playing == true)
+    if(status == LOW && pipes[i].playing == true)
     {
       midi_note_on(MidiCH, pipes[i].note, 0);
       pipes[i].playing = false;
