@@ -18,18 +18,8 @@
     <ClInclude Include="__vm\.MidiTest.vsarduino.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ardumidi.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ardumidi.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="MidiTest.ino">
-      <Filter>Source Files</Filter>
-    </None>
+    <None Include="MidiTest.ino" />
   </ItemGroup>
 </Project>

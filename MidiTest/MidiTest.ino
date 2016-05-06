@@ -10,6 +10,7 @@ Author:  Whipe The Pipe!
 #define numberOfPipes 5
 #define numberOfPots 1
 #define numberOFTilts 1
+#define TiltDelay 5
 
 const int pipePins[numberOfPipes] = {2, 4, 6, 10, 12}; //digital pin
 const int pipeLeds[numberOfPipes] = {13, 13, 13, 13, 13};
@@ -75,11 +76,11 @@ void setup()
   }
 
   //set up the tiltswitches 
-  tilts[1].leftPin = 0;
-  tilts[1].rightPin = 0;
-  tilts[1].buttonPin = 0;
-  tilts[1].controllNumber = controllNumber++;
-  tilts[1].value = 0;
+  tilts[0].leftPin = 7;
+  tilts[0].rightPin = 11;
+  tilts[0].buttonPin = 3;
+  tilts[0].controllNumber = controllNumber++;
+  tilts[0].value = 0;
 
 }
 
@@ -87,19 +88,15 @@ void setup()
 void loop()
 {
   //Potentiometers
-  if(millis() - DELTATIME > 20)
+  for(int i = 0; i < numberOfPots; i++)
   {
-    DELTATIME = millis();
-    for(int i = 0; i < numberOfPots; i++)
-    {
-      int potVal = map(analogRead(pots[i].pin), 0, 1023, 0, 127);
+    int potVal = map(analogRead(pots[i].pin), 0, 1023, 0, 127);
 
-      // kollar om potens värde har förändrats mer än +/-1. Pots'en är oexakta och hamnar mitt imellan 2 lägen...
-      if(pots[i].value != potVal && pots[i].value != potVal - 1 && pots[i].value != potVal + 1)
-      {
-        pots[i].value = potVal;
-        midi_controller_change(MidiCH, pots[i].controllNumber, pots[i].value);
-      }
+    // kollar om potens värde har förändrats mer än +/-1. Pots'en är oexakta och hamnar mitt imellan 2 lägen...
+    if(pots[i].value != potVal && pots[i].value != potVal - 1 && pots[i].value != potVal + 1)
+    {
+      pots[i].value = potVal;
+      midi_controller_change(MidiCH, pots[i].controllNumber, pots[i].value);
     }
   }
 
@@ -122,7 +119,7 @@ void loop()
   }
 
   //Tiltswitches
-  if(millis() - DELTATIME > 20)
+  if(millis() - DELTATIME > TiltDelay)
   {
     DELTATIME = millis();
 
@@ -143,15 +140,19 @@ void loop()
   }
 
 }
+void midi_note_on(int channel, int key, int velocity)
+{
+  midi_command(144 + channel, key, velocity);
+}
 
 void midi_controller_change(int channel, int control, int value)
 {
   midi_command(176+channel, control, value);
 }
 
-void midi_note_on(int channel, int key, int velocity)
+void midi_pitch_bend(int channel, int value)
 {
-  midi_command(144+channel, key, velocity);
+  midi_command(224+channel, value & 127, value >> 7);
 }
 
 void midi_command(int cmd, int data1, int data2)
