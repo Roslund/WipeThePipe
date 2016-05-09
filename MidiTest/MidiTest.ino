@@ -7,15 +7,31 @@ Author:  Whipe The Pipe!
 /* Start Config*/
 #define MidiCH 0
 #define midiVelocity 69
+
+//Delays all in millisecound
+#define TiltDelay 5  //How fast tilting will change the value.
+#define minNoteTime 30  //minimum time a not will be played and cant be played again
+
+//Config the instrument
 #define numberOfPipes 5
 #define numberOfPots 1
 #define numberOFTilts 1
-#define TiltDelay 5
 
+//Base notes for the pipes
+const int baseNotes[numberOfPipes] = {51, 54, 56, 58, 61}; //Midi values
+
+//Config pipes
 const int pipePins[numberOfPipes] = {2, 4, 6, 10, 12}; //digital pin
-const int pipeLeds[numberOfPipes] = {13, 13, 13, 13, 13};
+const int pipeLeds[numberOfPipes] = {13, 13, 13, 13, 13}; //digital pin
+
+//Config Potentiometers
 const int potPins[numberOfPots] = {5}; //analog pin
-const int baseNotes[numberOfPipes] = {51, 54, 56, 58, 61};
+
+//Config Tiltswitches 
+const int tiltLeftPin[numberOFTilts] = {7}; //digital pin
+const int tiltRightPin[numberOFTilts] = {11}; //digital pin
+const int tiltButtonPin[numberOFTilts] = {3}; //digital pin
+
 /*END Config */
 
 
@@ -26,13 +42,16 @@ typedef struct
   int ledpin;
   int note;
   bool playing;
+  unsigned long pressTime;
 }Pipe;
+
 typedef struct
 {
   int pin;
   int controllNumber;
   int value;
 }Pot;
+
 typedef struct
 {
   int leftPin;
@@ -40,21 +59,21 @@ typedef struct
   int buttonPin;
   int controllNumber;
   int value;
+  unsigned long tiltTime;
 }Tilt;
-/* END Sturcts*/
 
+/* END Sturcts*/
 
 Pipe pipes[numberOfPipes];
 Pot pots[numberOfPots];
 Tilt tilts[numberOFTilts];
-
-static unsigned long DELTATIME = millis();
 
 
 // the setup function runs once when you press reset or power the board
 void setup()
 {
   int controllNumber = 0;
+
   //  Set MIDI baud rate:
   Serial.begin(115200);
 
@@ -73,14 +92,19 @@ void setup()
     pinMode(pipeLeds[i], OUTPUT);
     pipes[i].note = baseNotes[i];
     pipes[i].playing = false;
+    pipes[i].pressTime = millis();
   }
 
-  //set up the tiltswitches 
-  tilts[0].leftPin = 7;
-  tilts[0].rightPin = 11;
-  tilts[0].buttonPin = 3;
-  tilts[0].controllNumber = controllNumber++;
-  tilts[0].value = 0;
+  //Iniszialice the tiltswitches 
+  for(int i = 0; i < numberOFTilts; i++)
+  {
+    tilts[i].leftPin = tiltLeftPin[i];
+    tilts[i].rightPin = tiltRightPin[i];
+    tilts[i].buttonPin = tiltButtonPin[i];
+    tilts[i].controllNumber = controllNumber++;
+    tilts[i].value = 0;
+    tilts[i].tiltTime = millis();
+  }
 
 }
 
@@ -103,28 +127,31 @@ void loop()
   //Pipes
   for(int i = 0; i < numberOfPipes; i++)
   {
-    int status = digitalRead(pipes[i].pin);
-    if(status == HIGH && pipes[i].playing == false)
+    if(millis() - pipes[i].pressTime > minNoteTime)
     {
-      midi_note_on(MidiCH, pipes[i].note, midiVelocity);
-      pipes[i].playing = true;
-      digitalWrite(pipes[i].ledpin, HIGH);
-    }
-    if(status == LOW && pipes[i].playing == true)
-    {
-      midi_note_on(MidiCH, pipes[i].note, 0);
-      pipes[i].playing = false;
-      digitalWrite(pipes[i].ledpin, LOW);
+      int status = digitalRead(pipes[i].pin);
+      if(status == HIGH && pipes[i].playing == false)
+      {
+        midi_note_on(MidiCH, pipes[i].note, midiVelocity);
+        pipes[i].playing = true;
+        digitalWrite(pipes[i].ledpin, HIGH);
+        pipes[i].pressTime = millis();
+      }
+      if(status == LOW && pipes[i].playing == true)
+      {
+        midi_note_on(MidiCH, pipes[i].note, 0);
+        pipes[i].playing = false;
+        digitalWrite(pipes[i].ledpin, LOW);
+      }
     }
   }
 
   //Tiltswitches
-  if(millis() - DELTATIME > TiltDelay)
+  for(int i = 0; i < numberOFTilts; i++)
   {
-    DELTATIME = millis();
-
-    for(int i = 0; i < numberOFTilts; i++)
+    if(millis() - tilts[i].tiltTime > minNoteTime && digitalRead(tilts[i].buttonPin) == HIGH)
     {
+      tilts[i].tiltTime = millis(); //Reset the delay
 
       if(digitalRead(tilts[i].leftPin) == HIGH && tilts[i].value < 127)
       {
@@ -138,8 +165,11 @@ void loop()
       }
     }
   }
-
 }
+
+//Midifunctions 
+
+
 void midi_note_on(int channel, int key, int velocity)
 {
   midi_command(144 + channel, key, velocity);
