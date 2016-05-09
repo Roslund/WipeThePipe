@@ -149,7 +149,7 @@ void loop()
   //Tiltswitches
   for(int i = 0; i < numberOFTilts; i++)
   {
-    if(millis() - tilts[i].tiltTime > minNoteTime && digitalRead(tilts[i].buttonPin) == HIGH)
+    if(millis() - tilts[i].tiltTime > TiltDelay && digitalRead(tilts[i].buttonPin) == HIGH)
     {
       tilts[i].tiltTime = millis(); //Reset the delay
 
