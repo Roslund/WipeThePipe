@@ -10,15 +10,15 @@ Author:  Whipe The Pipe!
 
 //Delays all in millisecound
 #define TiltDelay 5  //How fast tilting will change the value.
-#define minNoteTime 30  //minimum time a not will be played and cant be played again
+#define minNoteTime 150  //minimum time a not will be played and cant be played again
 
 //Config the instrument
 #define numberOfPipes 5
 #define numberOfPots 1
-#define numberOFTilts 1
+#define numberOFTilts 2
 
 //Base notes for the pipes
-const int baseNotes[numberOfPipes] = {51, 54, 56, 58, 61}; //Midi values
+const int baseNotes[numberOfPipes] = {48, 51, 53, 55, 58}; //Midi values
 
 //Config pipes
 const int pipePins[numberOfPipes] = {2, 4, 6, 10, 12}; //digital pin
@@ -28,10 +28,9 @@ const int pipeLeds[numberOfPipes] = {13, 13, 13, 13, 13}; //digital pin
 const int potPins[numberOfPots] = {5}; //analog pin
 
 //Config Tiltswitches 
-const int tiltLeftPin[numberOFTilts] = {7}; //digital pin
-const int tiltRightPin[numberOFTilts] = {11}; //digital pin
-const int tiltButtonPin[numberOFTilts] = {3}; //digital pin
-
+const int tiltLeftPin[numberOFTilts] = {3,8}; //digital pin
+const int tiltRightPin[numberOFTilts] = {5,9}; //digital pin
+const int tiltButtonPin[numberOFTilts] = {7,7}; //digital pin: pin 7 = stav, pin 11= handske
 /*END Config */
 
 
