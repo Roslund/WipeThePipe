@@ -4,33 +4,39 @@ Created: 4/29/2016 1:17:11 PM
 Author:  Whipe The Pipe!
 */
 
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h>
+#include <utility/imumaths.h>
+
 /* Start Config*/
 #define MidiCH 0
 #define midiVelocity 69
 
 //Delays all in millisecound
-#define TiltDelay 5  //How fast tilting will change the value.
-#define minNoteTime 150  //minimum time a not will be played and cant be played again
+#define minNoteTime 0  //minimum time a not will be played and cant be played again
 
 //Config the instrument
 #define numberOfPipes 5
 #define numberOfPots 1
-#define numberOFTilts 2
+//#define numberOFTilts 0
+#define numberOFAccelorometers 1
 
 //Base notes for the pipes
 const int baseNotes[numberOfPipes] = {48, 51, 53, 55, 58}; //Midi values
 
 //Config pipes
-const int pipePins[numberOfPipes] = {2, 4, 6, 10, 12}; //digital pin
+const int pipePins[numberOfPipes] = {8, 9, 10, 11, 12}; //digital pin
 const int pipeLeds[numberOfPipes] = {13, 13, 13, 13, 13}; //digital pin
 
 //Config Potentiometers
-const int potPins[numberOfPots] = {5}; //analog pin
+const int potPins[numberOfPots] = {3}; //analog pin
 
 //Config Tiltswitches 
-const int tiltLeftPin[numberOFTilts] = {3,8}; //digital pin
-const int tiltRightPin[numberOFTilts] = {5,9}; //digital pin
-const int tiltButtonPin[numberOFTilts] = {7,7}; //digital pin: pin 7 = stav, pin 11= handske
+//const int tiltLeftPin[numberOFTilts] = {3,8}; //digital pin
+//const int tiltRightPin[numberOFTilts] = {5,9}; //digital pin
+//const int tiltButtonPin[numberOFTilts] = {11, 11}; //digital pin: pin 7 = stav, pin 11= handske
+//const int tiltDelay[numberOFTilts] = {0,0}; //Time in milisecounds, lower value = faster changes.
 /*END Config */
 
 
@@ -43,6 +49,12 @@ typedef struct
   bool playing;
   unsigned long pressTime;
 }Pipe;
+
+typedef struct
+{
+  int y;
+  int z;
+}Accelorometer;
 
 typedef struct
 {
@@ -59,13 +71,16 @@ typedef struct
   int controllNumber;
   int value;
   unsigned long tiltTime;
+  int tiltDelay;
 }Tilt;
 
 /* END Sturcts*/
 
 Pipe pipes[numberOfPipes];
 Pot pots[numberOfPots];
-Tilt tilts[numberOFTilts];
+//Tilt tilts[numberOFTilts];
+Accelorometer Accelorometers[numberOFAccelorometers];
+Adafruit_BNO055 bno = Adafruit_BNO055(55);
 
 
 // the setup function runs once when you press reset or power the board
@@ -76,12 +91,20 @@ void setup()
   //  Set MIDI baud rate:
   Serial.begin(115200);
 
-  //Initsialize the pots
-  for(int i = 0; i < numberOfPots; i++)
+  // Set up the accelorometer
+  if(!bno.begin())
   {
-    pots[i].pin = potPins[i];
-    pots[i].controllNumber = controllNumber++;
+    /* There was a problem detecting the BNO055 ... check your connections */
+    while(true)
+    {
+      midi_note_on(MidiCH, 0, midiVelocity);
+      delay(1000);
+    }
   }
+  delay(1000);
+  bno.setExtCrystalUse(true);
+  Accelorometers[0].y = 63;
+  Accelorometers[0].z = 63;
 
   //Iniszialice the pipes
   for(int i = 0; i < numberOfPipes; i++)
@@ -94,32 +117,58 @@ void setup()
     pipes[i].pressTime = millis();
   }
 
-  //Iniszialice the tiltswitches 
-  for(int i = 0; i < numberOFTilts; i++)
+  //Initsialize the pots
+  for(int i = 0; i < numberOfPots; i++)
   {
-    tilts[i].leftPin = tiltLeftPin[i];
-    tilts[i].rightPin = tiltRightPin[i];
-    tilts[i].buttonPin = tiltButtonPin[i];
-    tilts[i].controllNumber = controllNumber++;
-    tilts[i].value = 0;
-    tilts[i].tiltTime = millis();
+    pots[i].pin = potPins[i];
+    pots[i].controllNumber = controllNumber++;
   }
+
+  //Iniszialice the tiltswitches 
+  //for(int i = 0; i < numberOFTilts; i++)
+  //{
+  //  tilts[i].leftPin = tiltLeftPin[i];
+  //  tilts[i].rightPin = tiltRightPin[i];
+  //  tilts[i].buttonPin = tiltButtonPin[i];
+  //  tilts[i].controllNumber = controllNumber++;
+  //  tilts[i].value = 0;
+  //  tilts[i].tiltTime = millis();
+  //  tilts[i].tiltDelay = tiltDelay[i];
+  //  
+  //}
 
 }
 
 // the loop function runs over and over again until power down or resetvoid
 void loop()
 {
-  //Potentiometers
-  for(int i = 0; i < numberOfPots; i++)
+  //Acelorometer
+  sensors_event_t event;
+  if(digitalRead(7) == HIGH)
   {
-    int potVal = map(analogRead(pots[i].pin), 0, 1023, 0, 127);
+    bno.getEvent(&event);
+    int y = event.orientation.y; //pitch
+    int z = event.orientation.z; //sidled
 
-    // kollar om potens värde har förändrats mer än +/-1. Pots'en är oexakta och hamnar mitt imellan 2 lägen...
-    if(pots[i].value != potVal && pots[i].value != potVal - 1 && pots[i].value != potVal + 1)
+    if(y >= -90 && y <= 90)
+      Accelorometers[0].y = map(y, -90, 90, 0, 127);
+    if(z >= -90 && z <= 90)
+      Accelorometers[0].z = map(z, -90, 90, 0, 127);
+    midi_controller_change(MidiCH, 13, Accelorometers[0].y);
+    midi_controller_change(MidiCH, 14, Accelorometers[0].z);
+  }
+  //återgå pitchen till 63
+  else
+  {
+    if(Accelorometers[0].y < 63)
     {
-      pots[i].value = potVal;
-      midi_controller_change(MidiCH, pots[i].controllNumber, pots[i].value);
+      Accelorometers[0].y++;
+      midi_controller_change(MidiCH, 13, Accelorometers[0].y);
+    } 
+    if(Accelorometers[0].y > 63)
+    {
+      Accelorometers[0].y--;
+      midi_controller_change(MidiCH, 13, Accelorometers[0].y);
     }
   }
 
@@ -144,26 +193,38 @@ void loop()
       }
     }
   }
-
-  //Tiltswitches
-  for(int i = 0; i < numberOFTilts; i++)
+  //Potentiometers
+  for(int i = 0; i < numberOfPots; i++)
   {
-    if(millis() - tilts[i].tiltTime > TiltDelay && digitalRead(tilts[i].buttonPin) == HIGH)
-    {
-      tilts[i].tiltTime = millis(); //Reset the delay
+    int potVal = map(analogRead(pots[i].pin), 0, 1023, 0, 127);
 
-      if(digitalRead(tilts[i].leftPin) == HIGH && tilts[i].value < 127)
-      {
-        tilts[i].value++;
-        midi_controller_change(MidiCH, tilts[i].controllNumber, tilts[i].value);
-      }
-      if(digitalRead(tilts[i].rightPin) == HIGH && tilts[i].value > 0)
-      {
-        tilts[i].value--;
-        midi_controller_change(MidiCH, tilts[i].controllNumber, tilts[i].value);
-      }
+    // kollar om potens värde har förändrats mer än +/-1. Pots'en är oexakta och hamnar mitt imellan 2 lägen...
+    if(pots[i].value != potVal && pots[i].value != potVal - 1 && pots[i].value != potVal + 1)
+    {
+      pots[i].value = potVal;
+      midi_controller_change(MidiCH, pots[i].controllNumber, pots[i].value);
     }
   }
+
+  //Tiltswitches
+  //for(int i = 0; i < numberOFTilts; i++)
+  //{
+  //  if(millis() - tilts[i].tiltTime > tilts[i].tiltDelay && digitalRead(tilts[i].buttonPin) == HIGH)
+  //  {
+  //    tilts[i].tiltTime = millis(); //Reset the delay
+
+  //    if(digitalRead(tilts[i].leftPin) == HIGH && tilts[i].value < 127)
+  //    {
+  //      tilts[i].value++;
+  //      midi_controller_change(MidiCH, tilts[i].controllNumber, tilts[i].value);
+  //    }
+  //    if(digitalRead(tilts[i].rightPin) == HIGH && tilts[i].value > 0)
+  //    {
+  //      tilts[i].value--;
+  //      midi_controller_change(MidiCH, tilts[i].controllNumber, tilts[i].value);
+  //    }
+  //  }
+  //}
 }
 
 //Midifunctions 
