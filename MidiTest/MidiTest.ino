@@ -13,14 +13,9 @@ Author:  Whipe The Pipe!
 #define MidiCH 0
 #define midiVelocity 69
 
-//Delays all in millisecound
-#define minNoteTime 0  //minimum time a not will be played and cant be played again
-
 //Config the instrument
 #define numberOfPipes 5
 #define numberOfPots 1
-//#define numberOFTilts 0
-#define numberOFAccelorometers 1
 
 //Base notes for the pipes
 const int baseNotes[numberOfPipes] = {48, 51, 53, 55, 58}; //Midi values
@@ -32,11 +27,6 @@ const int pipeLeds[numberOfPipes] = {13, 13, 13, 13, 13}; //digital pin
 //Config Potentiometers
 const int potPins[numberOfPots] = {3}; //analog pin
 
-//Config Tiltswitches 
-//const int tiltLeftPin[numberOFTilts] = {3,8}; //digital pin
-//const int tiltRightPin[numberOFTilts] = {5,9}; //digital pin
-//const int tiltButtonPin[numberOFTilts] = {11, 11}; //digital pin: pin 7 = stav, pin 11= handske
-//const int tiltDelay[numberOFTilts] = {0,0}; //Time in milisecounds, lower value = faster changes.
 /*END Config */
 
 
@@ -47,13 +37,18 @@ typedef struct
   int ledpin;
   int note;
   bool playing;
-  unsigned long pressTime;
 }Pipe;
 
 typedef struct
 {
-  int y;
+  int buttonPin;
+  int y1;
+  int y2;
   int z;
+  int controllNumberY1;
+  int controllNumberY2;
+  int controllNumberZ;
+  Adafruit_BNO055 bno;
 }Accelorometer;
 
 typedef struct
@@ -63,24 +58,11 @@ typedef struct
   int value;
 }Pot;
 
-typedef struct
-{
-  int leftPin;
-  int rightPin;
-  int buttonPin;
-  int controllNumber;
-  int value;
-  unsigned long tiltTime;
-  int tiltDelay;
-}Tilt;
-
 /* END Sturcts*/
 
 Pipe pipes[numberOfPipes];
 Pot pots[numberOfPots];
-//Tilt tilts[numberOFTilts];
-Accelorometer Accelorometers[numberOFAccelorometers];
-Adafruit_BNO055 bno = Adafruit_BNO055(55);
+Accelorometer accelorometer;
 
 
 // the setup function runs once when you press reset or power the board
@@ -92,7 +74,15 @@ void setup()
   Serial.begin(115200);
 
   // Set up the accelorometer
-  if(!bno.begin())
+  accelorometer.bno = Adafruit_BNO055(55);
+  accelorometer.buttonPin = 2;
+  accelorometer.y1 = 0;
+  accelorometer.y2 = 0;
+  accelorometer.z = 64;
+  accelorometer.controllNumberY1 = controllNumber++;
+  accelorometer.controllNumberY2 = controllNumber++;
+  accelorometer.controllNumberZ = controllNumber++;
+  if(!accelorometer.bno.begin())
   {
     /* There was a problem detecting the BNO055 ... check your connections */
     while(true)
@@ -101,10 +91,9 @@ void setup()
       delay(1000);
     }
   }
-  delay(1000);
-  bno.setExtCrystalUse(true);
-  Accelorometers[0].y = 63;
-  Accelorometers[0].z = 63;
+  delay(1000); //Not sure if this is nessasary
+  accelorometer.bno.setExtCrystalUse(true);
+
 
   //Iniszialice the pipes
   for(int i = 0; i < numberOfPipes; i++)
@@ -114,7 +103,6 @@ void setup()
     pinMode(pipeLeds[i], OUTPUT);
     pipes[i].note = baseNotes[i];
     pipes[i].playing = false;
-    pipes[i].pressTime = millis();
   }
 
   //Initsialize the pots
@@ -123,67 +111,22 @@ void setup()
     pots[i].pin = potPins[i];
     pots[i].controllNumber = controllNumber++;
   }
-
-  //Iniszialice the tiltswitches 
-  //for(int i = 0; i < numberOFTilts; i++)
-  //{
-  //  tilts[i].leftPin = tiltLeftPin[i];
-  //  tilts[i].rightPin = tiltRightPin[i];
-  //  tilts[i].buttonPin = tiltButtonPin[i];
-  //  tilts[i].controllNumber = controllNumber++;
-  //  tilts[i].value = 0;
-  //  tilts[i].tiltTime = millis();
-  //  tilts[i].tiltDelay = tiltDelay[i];
-  //  
-  //}
-
 }
 
 // the loop function runs over and over again until power down or resetvoid
 void loop()
 {
-  //Acelorometer
-  sensors_event_t event;
-  if(digitalRead(7) == HIGH)
-  {
-    bno.getEvent(&event);
-    int y = event.orientation.y; //pitch
-    int z = event.orientation.z; //sidled
-
-    if(y >= -90 && y <= 90)
-      Accelorometers[0].y = map(y, -90, 90, 0, 127);
-    if(z >= -90 && z <= 90)
-      Accelorometers[0].z = map(z, -90, 90, 0, 127);
-    midi_controller_change(MidiCH, 13, Accelorometers[0].y);
-    midi_controller_change(MidiCH, 14, Accelorometers[0].z);
-  }
-  //återgå pitchen till 63
-  else
-  {
-    if(Accelorometers[0].y < 63)
-    {
-      Accelorometers[0].y++;
-      midi_controller_change(MidiCH, 13, Accelorometers[0].y);
-    } 
-    if(Accelorometers[0].y > 63)
-    {
-      Accelorometers[0].y--;
-      midi_controller_change(MidiCH, 13, Accelorometers[0].y);
-    }
-  }
+  checkAccelorometer();
 
   //Pipes
   for(int i = 0; i < numberOfPipes; i++)
   {
-    if(millis() - pipes[i].pressTime > minNoteTime)
-    {
       int status = digitalRead(pipes[i].pin);
       if(status == HIGH && pipes[i].playing == false)
       {
         midi_note_on(MidiCH, pipes[i].note, midiVelocity);
         pipes[i].playing = true;
         digitalWrite(pipes[i].ledpin, HIGH);
-        pipes[i].pressTime = millis();
       }
       if(status == LOW && pipes[i].playing == true)
       {
@@ -191,7 +134,6 @@ void loop()
         pipes[i].playing = false;
         digitalWrite(pipes[i].ledpin, LOW);
       }
-    }
   }
   //Potentiometers
   for(int i = 0; i < numberOfPots; i++)
@@ -205,31 +147,52 @@ void loop()
       midi_controller_change(MidiCH, pots[i].controllNumber, pots[i].value);
     }
   }
-
-  //Tiltswitches
-  //for(int i = 0; i < numberOFTilts; i++)
-  //{
-  //  if(millis() - tilts[i].tiltTime > tilts[i].tiltDelay && digitalRead(tilts[i].buttonPin) == HIGH)
-  //  {
-  //    tilts[i].tiltTime = millis(); //Reset the delay
-
-  //    if(digitalRead(tilts[i].leftPin) == HIGH && tilts[i].value < 127)
-  //    {
-  //      tilts[i].value++;
-  //      midi_controller_change(MidiCH, tilts[i].controllNumber, tilts[i].value);
-  //    }
-  //    if(digitalRead(tilts[i].rightPin) == HIGH && tilts[i].value > 0)
-  //    {
-  //      tilts[i].value--;
-  //      midi_controller_change(MidiCH, tilts[i].controllNumber, tilts[i].value);
-  //    }
-  //  }
-  //}
 }
 
+
+void checkAccelorometer()
+{
+  sensors_event_t event;
+  if(digitalRead(accelorometer.buttonPin) == HIGH)
+  {
+    accelorometer.bno.getEvent(&event);
+    int y = event.orientation.y; //sidled
+    int z = event.orientation.z; //pitch
+    if(y <= 0)
+    {
+      if(y < -45)
+        y = -45;
+      accelorometer.y1 = map(y, -45, 0, 127, 0);
+      midi_controller_change(MidiCH, accelorometer.controllNumberY1, accelorometer.y1);
+    }
+    else if(y >= 0)
+    {
+      if(y > 80)
+        y = 80;
+      accelorometer.y2 = map(y, 0, 80, 0, 127);
+      midi_controller_change(MidiCH, accelorometer.controllNumberY2, accelorometer.y2);
+    }
+
+    //Z-Led (Pitchbend)
+    if(z >= -90 && z <= 90)
+    {
+      accelorometer.z = map(z, -90, 90, 0, 127);
+      midi_controller_change(MidiCH, accelorometer.controllNumberZ, accelorometer.z);
+    }
+  }
+  //nolla allt
+  else if(digitalRead(accelorometer.buttonPin) == LOW)
+  {
+
+    accelorometer.z = 64;
+    accelorometer.y1 = 0;
+    accelorometer.y2 = 0;
+    midi_controller_change(MidiCH, accelorometer.controllNumberZ, accelorometer.z);
+    midi_controller_change(MidiCH, accelorometer.controllNumberY1, accelorometer.y1);
+    midi_controller_change(MidiCH, accelorometer.controllNumberY2, accelorometer.y2);
+  }
+}
 //Midifunctions 
-
-
 void midi_note_on(int channel, int key, int velocity)
 {
   midi_command(144 + channel, key, velocity);
