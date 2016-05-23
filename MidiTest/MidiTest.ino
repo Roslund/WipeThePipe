@@ -42,6 +42,7 @@ typedef struct
 typedef struct
 {
   int buttonPin;
+  bool buttonPressed;
   int y1;
   int y2;
   int z;
@@ -76,6 +77,7 @@ void setup()
   // Set up the accelorometer
   accelorometer.bno = Adafruit_BNO055(55);
   accelorometer.buttonPin = 2;
+  accelorometer.buttonPressed = false;
   accelorometer.y1 = 0;
   accelorometer.y2 = 0;
   accelorometer.z = 64;
@@ -155,9 +157,12 @@ void checkAccelorometer()
   sensors_event_t event;
   if(digitalRead(accelorometer.buttonPin) == HIGH)
   {
+    accelorometer.buttonPressed = true;
+
     accelorometer.bno.getEvent(&event);
     int y = event.orientation.y; //sidled
     int z = event.orientation.z; //pitch
+
     if(y <= 0)
     {
       if(y < -45)
@@ -181,33 +186,28 @@ void checkAccelorometer()
     }
   }
   //nolla allt
-  else if(digitalRead(accelorometer.buttonPin) == LOW)
+  else if(digitalRead(accelorometer.buttonPin) == LOW && accelorometer.buttonPressed == true)
   {
-
-    accelorometer.z = 64;
-    accelorometer.y1 = 0;
-    accelorometer.y2 = 0;
-    midi_controller_change(MidiCH, accelorometer.controllNumberZ, accelorometer.z);
-    midi_controller_change(MidiCH, accelorometer.controllNumberY1, accelorometer.y1);
-    midi_controller_change(MidiCH, accelorometer.controllNumberY2, accelorometer.y2);
+    accelorometer.buttonPressed = false;
+    midi_controller_change(MidiCH, accelorometer.controllNumberZ, 64);
+    midi_controller_change(MidiCH, accelorometer.controllNumberY1, 0);
+    midi_controller_change(MidiCH, accelorometer.controllNumberY2, 0);
   }
 }
+
 //Midifunctions 
 void midi_note_on(int channel, int key, int velocity)
 {
   midi_command(144 + channel, key, velocity);
 }
-
 void midi_controller_change(int channel, int control, int value)
 {
   midi_command(176+channel, control, value);
 }
-
 void midi_pitch_bend(int channel, int value)
 {
   midi_command(224+channel, value & 127, value >> 7);
 }
-
 void midi_command(int cmd, int data1, int data2)
 {
   Serial.write(cmd);
